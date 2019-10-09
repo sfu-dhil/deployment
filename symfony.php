@@ -25,8 +25,8 @@ task('dhil:precheck', function(){
         $modified = count(explode("\n", $out));
         writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
         writeln($out);
-        $response = askChoice("Continue?", ['n' => 'No', 'y' =>'Yes'], 'n');
-        if($response != 'y') {
+        $response = askConfirmation("Continue?");
+        if( ! $response) {
             exit;
         }
     }
@@ -35,8 +35,8 @@ task('dhil:precheck', function(){
     if ($out !== '') {
         $commits = count(explode("\n", $out));
         writeln("<error>Warning:</error> {$commits} unpublished commits will not be included in the deployment.");
-        $response = askChoice("Continue?", ['n' => 'No', 'y' =>'Yes'], 'n');
-        if($response != 'y') {
+        $response = askConfirmation("Continue?");
+        if( ! $response) {
             exit;
         }
     }
