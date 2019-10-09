@@ -24,6 +24,7 @@ task('dhil:precheck', function(){
     if($out !== '') {
         $modified = count(explode("\n", $out));
         writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
+        writeln($out);
         $response = askChoice("Continue?", ['n' => 'No', 'y' =>'Yes'], 'n');
         if($response != 'y') {
             exit;
@@ -128,7 +129,6 @@ task('dhil:db:fetch', function() {
     $file = "/home/{$user}/{$app}-{$date}-{$stage}-r{$current}.sql";
     run("sudo mysqldump {$app} -r {$file}");
     run("sudo chown {$user} {$file}");
-    // set('become', $become);
 
     download($file, basename($file));
     writeln("Downloaded database dump to " . basename($file));
