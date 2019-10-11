@@ -93,9 +93,20 @@ task('dhil:sphinx', function() {
         $become = get('become');
 
         runLocally('/usr/local/bin/sphinx-build docs/source web/docs/sphinx');
-        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u $become rsync' ./web/docs/ $user@$host:{{release_path}}/web/docs", ['timeout' => null]);
+        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u $become rsync' ./web/docs/sphinx/ $user@$host:{{release_path}}/web/docs/sphinx", ['timeout' => null]);
     }
 })->desc('Build sphinx docs locally and upload to server.');
+
+task('dhil:sami', function(){
+    if (file_exists('sami.php')) {
+        $user = get('user');
+        $host = get('hostname');
+        $become = get('become');
+
+        runLocally('/usr/local/bin/sami update sami.php');
+        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u $become rsync' ./web/docs/api/ $user@$host:{{release_path}}/web/docs/api", ['timeout' => null]);
+    }
+})->desc('Build Sami API docs and upload to server.');
 
 task('dhil:db:backup', function() {
     $user = get('user');
