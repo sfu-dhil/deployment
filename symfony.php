@@ -25,7 +25,7 @@ task('dhil:precheck', function () {
         writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
         writeln($out);
         $response = askConfirmation('Continue?');
-        if ( ! $response) {
+        if (! $response) {
             exit;
         }
     }
@@ -35,7 +35,7 @@ task('dhil:precheck', function () {
         $commits = count(explode("\n", $out));
         writeln("<error>Warning:</error> {$commits} unpublished commits will not be included in the deployment.");
         $response = askConfirmation('Continue?');
-        if ( ! $response) {
+        if (! $response) {
             exit;
         }
     }
