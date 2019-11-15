@@ -130,6 +130,18 @@ task('dhil:sami', array(
     'dhil:sami:upload',
 ))->desc('Build Sami API docs and upload to server.');
 
+task('dhil:permissions', function(){
+    $user = get('user');
+    $become = get('become');
+
+    set('become', $user); // prevent sudo -u from failing.
+    $output = run('cd {{ current_path }} && sudo chcon -R ' . get('context') . ' ' . implode(' ', get('writable_dirs')));
+    if($output) {
+        writeln($output);
+    }
+    set('become', $become);
+});
+
 task('dhil:db:backup', function () {
     $user = get('user');
     $become = get('become');
@@ -193,6 +205,7 @@ task('deploy', array(
     'deploy:assets:install',
     'deploy:cache:clear',
     'deploy:writable',
+    'dhil:permissions',
     'dhil:db:backup',
     'dhil:db:migrate',
     'dhil:sphinx',
