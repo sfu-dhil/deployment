@@ -12,3 +12,258 @@ $settings = Yaml::parseFile('config/deploy.yml');
 foreach ($settings['.settings'] as $key => $value) {
     set($key, $value);
 }
+
+$app = get('application');
+if (file_exists("deploy.{$app}.php")) {
+    require "deploy.{$app}.php";
+}
+
+set('console', function () {
+    return parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet');
+});
+set('lock_path', function(){
+    return parse('{{deploy_path}}/.dep/deploy.lock');
+});
+
+/**
+ * Check that there are no modified files or commits that haven't been pushed. Ask the
+ * user to confirm.
+ */
+task('dhil:precheck', function () {
+    $out = runLocally('git status --porcelain --untracked-files=no');
+    if ('' !== $out) {
+        $modified = count(explode("\n", $out));
+        writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
+        writeln($out);
+        $response = askConfirmation('Continue?');
+        if (! $response) {
+            exit;
+        }
+    }
+
+    $out = runLocally('git cherry -v');
+    if ('' !== $out) {
+        $commits = count(explode("\n", $out));
+        $response = askConfirmation('Continue?');
+        if (! $response) {
+            exit;
+        }
+    }
+
+    $res = run('[ -f {{lock_path}} ] && echo Locked || echo OK');
+    if(trim($res) === 'Locked') {
+        writeln("<error>Warning:</error> Target is locked. Unlock and continue?");
+        $response = askConfirmation('Continue?');
+        if (! $response) {
+            exit;
+        }
+        run('rm -f {{lock_path}}');
+    }
+});
+
+/**
+ * Install the bundle assets.
+ */
+task('dhil:assets', function () {
+    $output = run('{{console}} assets:install --symlink');
+    writeln($output);
+})->desc('Install any bundle assets.');
+
+/**
+ * Run the testsuite on the server.
+ *
+ * Use the option --skip-tests to skip this step, but do so with caution.
+ */
+option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
+task('dhil:phpunit', function () {
+    if (input()->getOption('skip-tests')) {
+        writeln('Skipped');
+
+        return;
+    }
+    $output = run('cd {{ release_path }} && ./bin/phpunit', array('timeout' => null));
+    writeln($output);
+})->desc('Run phpunit.');
+
+/**
+ * Empty out the test cache. Do this before and after running the test suite.
+ */
+task('dhil:clear:test-cache', function () {
+    $output = run('{{console}} cache:clear --env=test');
+    writeln($output);
+});
+
+/**
+ * Set up a clean environment on the server and run the test suite. Use with caution, as the
+ * shared cache may present issues with the production site. It's very rare but it does happen.
+ */
+task('dhil:test', array(
+    'deploy:info',
+    'deploy:prepare',
+    'deploy:lock',
+    'deploy:release',
+    'deploy:update_code',
+    'deploy:create_cache_dir',
+    'deploy:shared',
+    'deploy:vendors',
+    'dhil:clear:test-cache',
+    'dhil:phpunit',
+    'dhil:clear:test-cache',
+))->desc('Run test suite on server in a clean environment.');
+after('dhil:test', 'deploy:unlock');
+
+/**
+ * Install the yarn dependencies.
+ */
+task('dhil:yarn', function () {
+    $output = run('cd {{ release_path }} && yarn install --prod --silent');
+    writeln($output);
+})->desc('Install bower dependencies.');
+
+/**
+ * Build the Sphinx documentation.
+ */
+task('dhil:sphinx:build', function () {
+    if (file_exists('docs')) {
+        runLocally('/usr/local/bin/sphinx-build docs/source web/docs/sphinx');
+    }
+})->desc('Build sphinx docs locally.');
+
+/**
+ * Upload the complete Sphinx documentation.
+ */
+task('dhil:sphinx:upload', function () {
+    if (file_exists('docs')) {
+        $user = get('user');
+        $host = get('hostname');
+        $become = get('become');
+        within('{{release_path}}', function () {
+            run('mkdir -p web/docs/sphinx');
+        });
+        runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' ./web/docs/sphinx/ {$user}@{$host}:{{release_path}}/web/docs/sphinx", array('timeout' => null));
+    }
+})->desc('Upload Sphinx docs to server.');
+
+/**
+ * Build and install the Sphinx docs. This is a simple wrapper
+ * around dhil:sphinx:build and dhil:sphinx:upload.
+ */
+task('dhil:sphinx', array(
+    'dhil:sphinx:build',
+    'dhil:sphinx:upload',
+))->desc('Build sphinx docs locally and upload to server.');
+
+/**
+ * Build the internal documentation.
+ */
+task('dhil:sami:build', function () {
+    if (file_exists('sami.php')) {
+        runLocally('/usr/local/bin/sami update sami.php');
+    }
+})->desc('Build Sami API docs and upload to server.');
+
+/**
+ * Upload the internal documentation to the server.
+ */
+task('dhil:sami:upload', function () {
+    if (file_exists('sami.php')) {
+        $user = get('user');
+        $host = get('hostname');
+        $become = get('become');
+        within('{{release_path}}', function () {
+            run('mkdir -p web/docs/api');
+        });
+        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u {$become} rsync' ./web/docs/api/ {$user}@{$host}:{{release_path}}/web/docs/api", array('timeout' => null));
+    }
+})->desc('Build Sami API docs and upload to server.');
+
+/**
+ * Build and upload the internal documentation. This is really just a simple wrapper around
+ * dhil:sami:build and dhil:sami:upload.
+ */
+task('dhil:sami', array(
+    'dhil:sami:build',
+    'dhil:sami:upload',
+))->desc('Build Sami API docs and upload to server.');
+
+/**
+ * Create a backup of the MySQL database. The mysql dump file will be saved as
+ * {$app}-{$date}-{$revision}.sql.
+ */
+task('dhil:db:backup', function () {
+    $user = get('user');
+    $become = get('become');
+    $app = get('application');
+
+    set('become', $user); // prevent sudo -u from failing.
+    $date = date('Y-m-d');
+    $current = get('release_name');
+    $file = "/home/{$become}/{$app}-{$date}-r{$current}.sql";
+    run("sudo mysqldump {$app} -r {$file}");
+    run("sudo chown {$become} {$file}");
+    set('become', $become);
+})->desc('Backup the mysql database.');
+
+/**
+ * Create a MySQL database backup and download it from the server.
+ */
+task('dhil:db:fetch', function () {
+    $user = get('user');
+    $become = get('become');
+    $app = get('application');
+    $stage = get('stage');
+
+    $date = date('Y-m-d');
+    $current = get('release_name');
+
+    set('become', $user); // prevent sudo -u from failing.
+    $file = "/home/{$user}/{$app}-{$date}-{$stage}-r{$current}.sql";
+    run("sudo mysqldump {$app} -r {$file}");
+    run("sudo chown {$user} {$file}");
+
+    download($file, basename($file));
+    writeln('Downloaded database dump to ' . basename($file));
+})->desc('Make a database backup and download it.');
+
+/**
+ * Display a success message.
+ */
+task('success', function () {
+    $target = get('target');
+    $release = get('release_name');
+    $host = get('hostname');
+    $path = get('site_path');
+
+    writeln("Successfully deployed {$target} release {$release}");
+    writeln("Visit http://{$host}{$path} to check.");
+});
+
+task('deploy', [
+    'dhil:precheck',
+    'deploy:info',
+    'deploy:prepare',
+    'deploy:lock',
+    'deploy:release',
+    'deploy:update_code',
+    'deploy:shared',
+    'deploy:vendors',
+
+    'dhil:assets',
+    'dhil:clear:test-cache',
+    'dhil:phpunit',
+    'dhil:clear:test-cache',
+    'dhil:db:backup',
+    'database:migrate',
+    'dhil:sphinx',
+    'dhil:sami',
+    'dhil:yarn',
+
+    'deploy:writable',
+    'deploy:cache:clear',
+    'deploy:cache:warmup',
+    'deploy:symlink',
+    'deploy:unlock',
+    'cleanup',
+]);
+after('deploy:failed', 'deploy:unlock');
+after('deploy', 'success');
