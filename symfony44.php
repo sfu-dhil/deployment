@@ -7,8 +7,8 @@ use Symfony\Component\Yaml\Yaml;
 
 require 'recipe/symfony4.php';
 
-inventory('config/deploy.yml');
-$settings = Yaml::parseFile('config/deploy.yml');
+inventory('config/deploy.yaml');
+$settings = Yaml::parseFile('config/deploy.yaml');
 foreach ($settings['.settings'] as $key => $value) {
     set($key, $value);
 }
@@ -225,6 +225,18 @@ task('dhil:db:fetch', function () {
     writeln('Downloaded database dump to ' . basename($file));
 })->desc('Make a database backup and download it.');
 
+task('dhil:permissions', function(){
+    $user = get('user');
+    $become = get('become');
+
+    set('become', $user); // prevent sudo -u from failing.
+    $output = run('cd {{ release_path }} && sudo chcon -R ' . get('context') . ' ' . implode(' ', get('writable_dirs')));
+    if($output) {
+        writeln($output);
+    }
+    set('become', $become);
+});
+
 /**
  * Display a success message.
  */
@@ -259,6 +271,7 @@ task('deploy', [
     'dhil:yarn',
 
     'deploy:writable',
+    'dhil:permissions',
     'deploy:cache:clear',
     'deploy:cache:warmup',
     'deploy:symlink',
