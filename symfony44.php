@@ -125,7 +125,7 @@ task('dhil:yarn', function () {
  */
 task('dhil:sphinx:build', function () {
     if (file_exists('docs')) {
-        runLocally('/usr/local/bin/sphinx-build docs/source web/docs/sphinx');
+        runLocally('/usr/local/bin/sphinx-build docs/source public/docs/sphinx');
     }
 })->desc('Build sphinx docs locally.');
 
@@ -138,9 +138,9 @@ task('dhil:sphinx:upload', function () {
         $host = get('hostname');
         $become = get('become');
         within('{{release_path}}', function () {
-            run('mkdir -p web/docs/sphinx');
+            run('mkdir -p public/docs/sphinx');
         });
-        runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' ./web/docs/sphinx/ {$user}@{$host}:{{release_path}}/web/docs/sphinx", array('timeout' => null));
+        runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' ./public/docs/sphinx/ {$user}@{$host}:{{release_path}}/public/docs/sphinx", array('timeout' => null));
     }
 })->desc('Upload Sphinx docs to server.');
 
@@ -171,9 +171,9 @@ task('dhil:sami:upload', function () {
         $host = get('hostname');
         $become = get('become');
         within('{{release_path}}', function () {
-            run('mkdir -p web/docs/api');
+            run('mkdir -p public/docs/api');
         });
-        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u {$become} rsync' ./web/docs/api/ {$user}@{$host}:{{release_path}}/web/docs/api", array('timeout' => null));
+        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u {$become} rsync' ./public/docs/api/ {$user}@{$host}:{{release_path}}/public/docs/api", array('timeout' => null));
     }
 })->desc('Build Sami API docs and upload to server.');
 
