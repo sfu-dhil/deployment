@@ -78,13 +78,15 @@ task('dhil:test', array(
 after('dhil:test', 'deploy:unlock');
 
 task('dhil:bower', function () {
-    $output = run('cd {{ release_path }} && bower -q install');
-    writeln($output);
-    if (file_exists('package.json')) {
-        $output = run('cd {{ release_path }} && npm -q install --prefix web/npm');
+    if(file_exists('bower.json')) {
+        $output = run('cd {{ release_path }} && bower -q install');
         writeln($output);
     }
-})->desc('Install bower dependencies.');
+    if (file_exists('package.json')) {
+        $output = run('cd {{ release_path }} && yarn install');
+        writeln($output);
+    }
+})->desc('Install dependencies.');
 
 task('dhil:sphinx:build', function () {
     if (file_exists('docs')) {
