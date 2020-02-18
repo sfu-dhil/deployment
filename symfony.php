@@ -210,7 +210,7 @@ task('deploy', array(
     'dhil:db:backup',
     'dhil:db:migrate',
     'dhil:sphinx',
-    'dhil:sami',
+//    'dhil:sami',
     'dhil:bower',
     'deploy:symlink',
     'dhil:permissions',
