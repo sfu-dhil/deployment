@@ -267,7 +267,7 @@ task('deploy', [
     'dhil:db:backup',
     'database:migrate',
     'dhil:sphinx',
-    'dhil:sami',
+//    'dhil:sami',
     'dhil:yarn',
 
     'deploy:writable',
