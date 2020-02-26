@@ -231,9 +231,11 @@ task('dhil:permissions', function(){
 
     set('become', $user); // prevent sudo -u from failing.
     $output = run('cd {{ release_path }} && sudo chcon -R ' . get('context') . ' ' . implode(' ', get('writable_dirs')));
+    $output .= run('cd {{ release_path }} && sudo chcon -R unconfined_u:object_r:httpd_log_t:s0 var/log');
     if($output) {
         writeln($output);
     }
+
     set('become', $become);
 });
 
