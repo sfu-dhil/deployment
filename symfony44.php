@@ -225,6 +225,15 @@ task('dhil:db:fetch', function () {
     writeln('Downloaded database dump to ' . basename($file));
 })->desc('Make a database backup and download it.');
 
+task('dhil:db:migrate', function () {
+    $options = '--allow-no-migration';
+    if (get('migrations_config') !== '') {
+        $options = sprintf('%s --configuration={{release_path}}/{{migrations_config}}', $options);
+    }
+
+    run(sprintf('cd {{release_path}} && {{bin/php}} {{bin/console}} doctrine:migrations:migrate %s {{console_options}}', $options));
+})->desc('Apply database changes');
+
 task('dhil:permissions', function(){
     $user = get('user');
     $become = get('become');
@@ -267,7 +276,7 @@ task('deploy', [
     'dhil:phpunit',
     'dhil:clear:test-cache',
     'dhil:db:backup',
-    'database:migrate',
+    'dhil:db:migrate',
     'dhil:sphinx',
 //    'dhil:sami',
     'dhil:yarn',
