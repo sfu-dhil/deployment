@@ -121,6 +121,14 @@ task('dhil:yarn', function () {
 })->desc('Install bower dependencies.');
 
 /**
+ * Install the fonts dependencies.
+ */
+task('dhil:fonts', function () {
+    $output = run('cd {{ release_path }} && ./bin/console nines:fonts:download');
+    writeln($output);
+})->desc('Install fonts.');
+
+/**
  * Build the Sphinx documentation.
  */
 task('dhil:sphinx:build', function () {
@@ -280,6 +288,7 @@ task('deploy', [
     'dhil:sphinx',
 //    'dhil:sami',
     'dhil:yarn',
+    'dhil:fonts',
 
     'deploy:writable',
     'dhil:permissions',
