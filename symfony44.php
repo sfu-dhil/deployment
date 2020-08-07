@@ -124,6 +124,9 @@ task('dhil:yarn', function () {
  * Install the fonts dependencies.
  */
 task('dhil:fonts', function () {
+    if( ! file_exists('config/fonts.yaml')) {
+        return;
+    }
     $output = run('cd {{ release_path }} && ./bin/console nines:fonts:download');
     writeln($output);
 })->desc('Install fonts.');
