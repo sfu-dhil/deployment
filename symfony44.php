@@ -44,6 +44,7 @@ task('dhil:precheck', function () {
     $out = runLocally('git cherry -v');
     if ('' !== $out) {
         $commits = count(explode("\n", $out));
+        writeln("<error>Warning:</error> {$commits} commits not pushed.");
         $response = askConfirmation('Continue?');
         if (! $response) {
             exit;
