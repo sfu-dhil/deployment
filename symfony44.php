@@ -238,13 +238,36 @@ task('dhil:db:fetch', function () {
 })->desc('Make a database backup and download it.');
 
 task('dhil:db:migrate', function () {
-    $options = '--allow-no-migration';
-    if (get('migrations_config') !== '') {
-        $options = sprintf('%s --configuration={{release_path}}/{{migrations_config}}', $options);
+    $count =  (int)runLocally('find migrations -type f -name "*.php" | wc -l');
+    if($count > 1) {
+        $options = '--allow-no-migration';
+        if (get('migrations_config') !== '') {
+            $options = sprintf('%s --configuration={{release_path}}/{{migrations_config}}', $options);
+        }
+        run(sprintf('cd {{release_path}} && {{bin/php}} {{bin/console}} doctrine:migrations:migrate %s {{console_options}}', $options));
+    } else if($count === 1) {
+        $options = '';
+        if (get('migrations_config') !== '') {
+            $options = '--configuration={{release_path}}/{{migrations_config}}';
+        }
+        run(sprintf('cd {{release_path}} && {{bin/php}} {{bin/console}} doctrine:migrations:rollup %s {{console_options}}', $options));
+    } else {
+        writeln("No migrations found.");
     }
-
-    run(sprintf('cd {{release_path}} && {{bin/php}} {{bin/console}} doctrine:migrations:migrate %s {{console_options}}', $options));
 })->desc('Apply database changes');
+
+task('dhil:db:rollup', function() {
+    if( ! file_exists('migrations')) {
+        mkdir('migrations');
+    }
+    $count =  (int)runLocally('find migrations -type f -name "*.php" | wc -l');
+    if($count !== 0) {
+        writeln("There are {$count} migrations which must be removed before rolling up.");
+        exit;
+    }
+    runLocally('php bin/console doctrine:migrations:dump-schema');
+    runLocally('php bin/console doctrine:migrations:rollup');
+});
 
 task('dhil:permissions', function(){
     $user = get('user');
