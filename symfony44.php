@@ -82,7 +82,7 @@ task('dhil:phpunit', function () {
 
         return;
     }
-    $output = run('cd {{ release_path }} && ./bin/phpunit', array('timeout' => null));
+    $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', array('timeout' => null));
     writeln($output);
 })->desc('Run phpunit.');
 
