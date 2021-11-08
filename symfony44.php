@@ -219,7 +219,7 @@ task('dhil:db:backup', function () {
 /**
  * Create a MySQL database backup and download it from the server.
  */
-task('dhil:db:fetch', function () {
+task('dhil:db:schema', function () {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -229,12 +229,42 @@ task('dhil:db:fetch', function () {
     $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
-    $file = "/home/{$user}/{$app}-{$date}-{$stage}-r{$current}.sql";
-    run("sudo mysqldump {$app} -r {$file}");
+    $file = "/home/{$user}/{$app}-schema-{$date}-{$stage}-r{$current}.sql";
+    run("sudo mysqldump {$app} --flush-logs --no-data -r {$file}");
     run("sudo chown {$user} {$file}");
 
     download($file, basename($file));
     writeln('Downloaded database dump to ' . basename($file));
+    set('become', $become);
+})->desc('Make a database backup and download it.');
+
+/**
+ * Create a MySQL database backup and download it from the server.
+ */
+option('all-tables', null, InputOption::VALUE_NONE, 'Do not ignore any tables when fetching database.');
+task('dhil:db:data', function () {
+    $user = get('user');
+    $become = get('become');
+    $app = get('application');
+    $stage = get('stage');
+
+    $date = date('Y-m-d');
+    $current = get('release_name');
+
+    set('become', $user); // prevent sudo -u from failing.
+    $file = "/home/{$user}/{$app}-data-{$date}-{$stage}-r{$current}.sql";
+    $ignore = get('ignore_tables', []);
+    if(count($ignore) && !input()->getOption('all-tables')) {
+        $ignoredTables = implode(',', array_map(function ($s) use ($app) { return $app . '.' . $s; }, $ignore));
+        run("sudo mysqldump {$app} --flush-logs --no-create-info -r {$file} --ignore-table={{$ignoredTables}}");
+    } else {
+        run("sudo mysqldump {$app} -r {$file}");
+    }
+    run("sudo chown {$user} {$file}");
+
+    download($file, basename($file));
+    writeln('Downloaded database dump to ' . basename($file));
+    set('become', $become);
 })->desc('Make a database backup and download it.');
 
 task('dhil:db:migrate', function () {
@@ -295,6 +325,14 @@ task('success', function () {
     writeln("Successfully deployed {$target} release {$release}");
     writeln("Visit http://{$host}{$path} to check.");
 });
+
+/**
+ * Create a MySQL database backup and download it from the server.
+ */
+task('dhil:db:fetch', [
+    'dhil:db:schema',
+    'dhil:db:data',
+]);
 
 task('deploy', [
     'dhil:precheck',
