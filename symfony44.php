@@ -242,7 +242,7 @@ task('dhil:db:data', function () : void {
         $ignoredTables = implode(',', array_map(fn ($s) => $app . '.' . $s, $ignore));
         run("sudo mysqldump {$app} --flush-logs --no-create-info -r {$file} --ignore-table={{$ignoredTables}}");
     } else {
-        run("sudo mysqldump {$app} -r {$file}");
+        run("sudo mysqldump {$app} --flush-logs --no-create-info -r {$file}");
     }
     run("sudo chown {$user} {$file}");
 
