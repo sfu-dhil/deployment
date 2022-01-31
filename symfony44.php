@@ -131,7 +131,7 @@ task('dhil:fonts', function () : void {
 // Build the Sphinx documentation.
 task('dhil:sphinx:build', function () : void {
     if (file_exists('docs')) {
-        runLocally('/usr/local/bin/sphinx-build docs/source public/docs/sphinx');
+        runLocally('sphinx-build docs/source public/docs/sphinx');
     }
 })->desc('Build sphinx docs locally.');
 
@@ -156,35 +156,6 @@ task('dhil:sphinx', [
     'dhil:sphinx:build',
     'dhil:sphinx:upload',
 ])->desc('Build sphinx docs locally and upload to server.');
-
-// Build the internal documentation.
-task('dhil:sami:build', function () : void {
-    if (file_exists('sami.php')) {
-        runLocally('/usr/local/bin/sami update sami.php');
-    }
-})->desc('Build Sami API docs and upload to server.');
-
-// Upload the internal documentation to the server.
-task('dhil:sami:upload', function () : void {
-    if (file_exists('sami.php')) {
-        $user = get('user');
-        $host = get('hostname');
-        $become = get('become');
-        within('{{release_path}}', function () : void {
-            run('mkdir -p public/docs/api');
-        });
-        runLocally("rsync -av -e 'ssh' --rsync-path='sudo -u {$become} rsync' ./public/docs/api/ {$user}@{$host}:{{release_path}}/public/docs/api", ['timeout' => null]);
-    }
-})->desc('Build Sami API docs and upload to server.');
-
-/*
- * Build and upload the internal documentation. This is really just a simple wrapper around
- * dhil:sami:build and dhil:sami:upload.
- */
-task('dhil:sami', [
-    'dhil:sami:build',
-    'dhil:sami:upload',
-])->desc('Build Sami API docs and upload to server.');
 
 /*
  * Create a backup of the MySQL database. The mysql dump file will be saved as
@@ -334,7 +305,6 @@ task('deploy', [
     'dhil:db:backup',
     'dhil:db:migrate',
     'dhil:sphinx',
-    //    'dhil:sami',
     'dhil:yarn',
     'dhil:fonts',
 
