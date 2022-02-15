@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * (c) 2021 Michael Joyce <mjoyce@sfu.ca>
+ * (c) 2022 Michael Joyce <mjoyce@sfu.ca>
  * This source file is subject to the GPL v2, bundled
  * with this source code in the file LICENSE.
  */
@@ -26,7 +26,7 @@ if (file_exists("deploy.{$app}.php")) {
     require "deploy.{$app}.php";
 }
 
-task('dhil:precheck', function () : void {
+task('dhil:precheck', function() : void {
     $out = runLocally('git status --porcelain --untracked-files=no');
     if ('' !== $out) {
         $modified = count(explode("\n", $out));
@@ -49,7 +49,7 @@ task('dhil:precheck', function () : void {
     }
 });
 
-task('dhil:db:backup', function () : void {
+task('dhil:db:backup', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -63,12 +63,12 @@ task('dhil:db:backup', function () : void {
     set('become', $become);
 })->desc('Backup the mysql database.');
 
-task('dhil:db:migrate', function () : void {
+task('dhil:db:migrate', function() : void {
     $output = run('cd {{ release_path }} && ./bin/console doctrine:migrations:migrate --no-interaction');
     writeln($output);
 });
 
-task('dhil:db:fetch', function () : void {
+task('dhil:db:fetch', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -86,7 +86,7 @@ task('dhil:db:fetch', function () : void {
     writeln('Downloaded database dump to ' . basename($file));
 })->desc('Make a database backup and download it.');
 
-task('dhil:media:fetch', function () : void {
+task('dhil:media:fetch', function() : void {
     $user = get('user');
     $host = get('hostname');
     $app = get('application');

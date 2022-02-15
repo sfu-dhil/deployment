@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * (c) 2021 Michael Joyce <mjoyce@sfu.ca>
+ * (c) 2022 Michael Joyce <mjoyce@sfu.ca>
  * This source file is subject to the GPL v2, bundled
  * with this source code in the file LICENSE.
  */
@@ -22,18 +22,19 @@ foreach ($settings['.settings'] as $key => $value) {
 }
 
 $app = get('application');
-if (file_exists("deploy.{$app}.php")) {
-    require "deploy.{$app}.php";
+$customFile = 'deploy.{$app}.php';
+if (file_exists($customFile)) {
+    require $customFile;
 }
 
-set('console', fn () => parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet'));
-set('lock_path', fn () => parse('{{deploy_path}}/.dep/deploy.lock'));
+set('console', fn() => parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet'));
+set('lock_path', fn() => parse('{{deploy_path}}/.dep/deploy.lock'));
 
 /*
  * Check that there are no modified files or commits that haven't been pushed. Ask the
  * user to confirm.
  */
-task('dhil:precheck', function () : void {
+task('dhil:precheck', function() : void {
     $out = runLocally('git status --porcelain --untracked-files=no');
     if ('' !== $out) {
         $modified = count(explode("\n", $out));
@@ -67,60 +68,19 @@ task('dhil:precheck', function () : void {
 });
 
 // Install the bundle assets.
-task('dhil:assets', function () : void {
+task('dhil:assets', function() : void {
     $output = run('{{console}} assets:install --symlink');
     writeln($output);
 })->desc('Install any bundle assets.');
 
-/*
- * Run the testsuite on the server.
- *
- * Use the option --skip-tests to skip this step, but do so with caution.
- */
-option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
-task('dhil:phpunit', function () : void {
-    if (input()->getOption('skip-tests')) {
-        writeln('Skipped');
-
-        return;
-    }
-    $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', ['timeout' => null]);
-    writeln($output);
-})->desc('Run phpunit.');
-
-// Empty out the test cache. Do this before and after running the test suite.
-task('dhil:clear:test-cache', function () : void {
-    $output = run('{{console}} cache:clear --env=test');
-    writeln($output);
-});
-
-/*
- * Set up a clean environment on the server and run the test suite. Use with caution, as the
- * shared cache may present issues with the production site. It's very rare but it does happen.
- */
-task('dhil:test', [
-    'deploy:info',
-    'deploy:prepare',
-    'deploy:lock',
-    'deploy:release',
-    'deploy:update_code',
-    'deploy:create_cache_dir',
-    'deploy:shared',
-    'deploy:vendors',
-    'dhil:clear:test-cache',
-    'dhil:phpunit',
-    'dhil:clear:test-cache',
-])->desc('Run test suite on server in a clean environment.');
-after('dhil:test', 'deploy:unlock');
-
 // Install the yarn dependencies.
-task('dhil:yarn', function () : void {
+task('dhil:yarn', function() : void {
     $output = run('cd {{ release_path }} && yarn install --prod --silent');
     writeln($output);
 })->desc('Install bower dependencies.');
 
 // Install the fonts dependencies.
-task('dhil:fonts', function () : void {
+task('dhil:fonts', function() : void {
     if ( ! file_exists('config/fonts.yaml')) {
         return;
     }
@@ -128,20 +88,36 @@ task('dhil:fonts', function () : void {
     writeln($output);
 })->desc('Install fonts.');
 
+/*
+ * Run the testsuite on the server.
+ *
+ * Use the option --skip-tests to skip this step, but do so with caution.
+ */
+option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
+task('dhil:phpunit', function() : void {
+    if (input()->getOption('skip-tests')) {
+        writeln('Skipped');
+
+        return;
+    }
+    $output = run('cd {{ release_path }} && make test', ['timeout' => null]);
+    writeln($output);
+})->desc('Run phpunit.');
+
 // Build the Sphinx documentation.
-task('dhil:sphinx:build', function () : void {
+task('dhil:sphinx:build', function() : void {
     if (file_exists('docs')) {
         runLocally('sphinx-build docs/source public/docs/sphinx');
     }
 })->desc('Build sphinx docs locally.');
 
 // Upload the complete Sphinx documentation.
-task('dhil:sphinx:upload', function () : void {
+task('dhil:sphinx:upload', function() : void {
     if (file_exists('docs')) {
         $user = get('user');
         $host = get('hostname');
         $become = get('become');
-        within('{{release_path}}', function () : void {
+        within('{{release_path}}', function() : void {
             run('mkdir -p public/docs/sphinx');
         });
         runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' ./public/docs/sphinx/ {$user}@{$host}:{{release_path}}/public/docs/sphinx", ['timeout' => null]);
@@ -161,7 +137,7 @@ task('dhil:sphinx', [
  * Create a backup of the MySQL database. The mysql dump file will be saved as
  * {$app}-{$date}-{$revision}.sql.
  */
-task('dhil:db:backup', function () : void {
+task('dhil:db:backup', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -176,7 +152,7 @@ task('dhil:db:backup', function () : void {
 })->desc('Backup the mysql database.');
 
 // Create a MySQL database backup and download it from the server.
-task('dhil:db:schema', function () : void {
+task('dhil:db:schema', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -186,7 +162,7 @@ task('dhil:db:schema', function () : void {
     $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
-    $file = "/home/{$user}/{$app}-schema-{$date}-{$stage}-r{$current}.sql";
+    $file = "/home/{$user}/{$app}-schema.sql";
     run("sudo mysqldump {$app} --flush-logs --no-data -r {$file}");
     run("sudo chown {$user} {$file}");
 
@@ -197,7 +173,7 @@ task('dhil:db:schema', function () : void {
 
 // Create a MySQL database backup and download it from the server.
 option('all-tables', null, InputOption::VALUE_NONE, 'Do not ignore any tables when fetching database.');
-task('dhil:db:data', function () : void {
+task('dhil:db:data', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
@@ -207,10 +183,10 @@ task('dhil:db:data', function () : void {
     $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
-    $file = "/home/{$user}/{$app}-data-{$date}-{$stage}-r{$current}.sql";
+    $file = "/home/{$user}/{$app}-data.sql";
     $ignore = get('ignore_tables', []);
     if (count($ignore) && ! input()->getOption('all-tables')) {
-        $ignoredTables = implode(',', array_map(fn ($s) => $app . '.' . $s, $ignore));
+        $ignoredTables = implode(',', array_map(fn($s) => $app . '.' . $s, $ignore));
         run("sudo mysqldump {$app} --flush-logs --no-create-info -r {$file} --ignore-table={{$ignoredTables}}");
     } else {
         run("sudo mysqldump {$app} --flush-logs --no-create-info -r {$file}");
@@ -222,7 +198,7 @@ task('dhil:db:data', function () : void {
     set('become', $become);
 })->desc('Make a database backup and download it.');
 
-task('dhil:db:migrate', function () : void {
+task('dhil:db:migrate', function() : void {
     $count = (int) runLocally('find migrations -type f -name "*.php" | wc -l');
     if ($count > 1) {
         $options = '--allow-no-migration';
@@ -243,7 +219,7 @@ task('dhil:db:migrate', function () : void {
     }
 })->desc('Apply database changes');
 
-task('dhil:db:rollup', function () : void {
+task('dhil:db:rollup', function() : void {
     if ( ! file_exists('migrations')) {
         mkdir('migrations');
     }
@@ -257,7 +233,14 @@ task('dhil:db:rollup', function () : void {
     runLocally('php bin/console doctrine:migrations:rollup');
 });
 
-task('dhil:permissions', function () : void {
+task('dhil:media', function() : void {
+    $user = get('user');
+    $host = get('hostname');
+    $become = get('become');
+    runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' {$user}@{$host}:{{release_path}}/data/ data", ['timeout' => null]);
+});
+
+task('dhil:permissions', function() : void {
     $user = get('user');
     $become = get('become');
 
@@ -272,7 +255,7 @@ task('dhil:permissions', function () : void {
 });
 
 // Display a success message.
-task('success', function () : void {
+task('success', function() : void {
     $target = get('target');
     $release = get('release_name');
     $host = get('hostname');
@@ -298,11 +281,9 @@ task('deploy', [
     'deploy:shared',
     'deploy:vendors',
 
-    'dhil:assets',
-    'dhil:clear:test-cache',
-    'dhil:phpunit',
-    'dhil:clear:test-cache',
     'dhil:db:backup',
+    'dhil:assets',
+    'dhil:phpunit',
     'dhil:db:migrate',
     'dhil:sphinx',
     'dhil:yarn',
