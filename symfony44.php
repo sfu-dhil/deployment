@@ -22,8 +22,9 @@ foreach ($settings['.settings'] as $key => $value) {
 }
 
 $app = get('application');
-if (file_exists("deploy.{$app}.php")) {
-    require "deploy.{$app}.php";
+$customFile = 'deploy.{$app}.php';
+if (file_exists($customFile)) {
+    require $customFile;
 }
 
 set('console', fn() => parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet'));
