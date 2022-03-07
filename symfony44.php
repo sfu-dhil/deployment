@@ -100,7 +100,11 @@ task('dhil:phpunit', function() : void {
 
         return;
     }
-    $output = run('cd {{ release_path }} && make test', ['timeout' => null]);
+    if(file_exists('Makefile')) {
+        $output = run('cd {{ release_path }} && make test', ['timeout' => null ]);
+    } else {
+        $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', ['timeout' => null]);
+    }
     writeln($output);
 })->desc('Run phpunit.');
 
