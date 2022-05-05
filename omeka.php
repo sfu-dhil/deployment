@@ -97,7 +97,6 @@ task('dhil:media:fetch', function() : void {
 
 // restart php-fpm is required for some things.
 
-('Deploy your project');
 task('deploy', [
     'deploy:info',
     'deploy:prepare',

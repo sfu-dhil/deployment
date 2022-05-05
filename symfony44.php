@@ -15,12 +15,14 @@ use Symfony\Component\Yaml\Yaml;
 
 require 'recipe/symfony4.php';
 
+// Parse the deployment configuration file
 inventory('config/deploy.yaml');
 $settings = Yaml::parseFile('config/deploy.yaml');
 foreach ($settings['.settings'] as $key => $value) {
     set($key, $value);
 }
 
+// If there's a custom deployment script include it here.
 $app = get('application');
 $customFile = 'deploy.{$app}.php';
 if (file_exists($customFile)) {
@@ -30,63 +32,23 @@ if (file_exists($customFile)) {
 set('console', fn() => parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet'));
 set('lock_path', fn() => parse('{{deploy_path}}/.dep/deploy.lock'));
 
-/*
- * Check that there are no modified files or commits that haven't been pushed. Ask the
- * user to confirm.
- */
-task('dhil:precheck', function() : void {
-    $out = runLocally('git status --porcelain --untracked-files=no');
-    if ('' !== $out) {
-        $modified = count(explode("\n", $out));
-        writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
-        writeln($out);
-        $response = askConfirmation('Continue?');
-        if ( ! $response) {
-            exit;
-        }
-    }
-
-    $out = runLocally('git cherry -v');
-    if ('' !== $out) {
-        $commits = count(explode("\n", $out));
-        writeln("<error>Warning:</error> {$commits} commits not pushed.");
-        $response = askConfirmation('Continue?');
-        if ( ! $response) {
-            exit;
-        }
-    }
-
-    $res = run('[ -f {{lock_path}} ] && echo Locked || echo OK');
-    if ('Locked' === trim($res)) {
-        writeln('<error>Warning:</error> Target is locked. Unlock and continue?');
-        $response = askConfirmation('Continue?');
-        if ( ! $response) {
-            exit;
-        }
-        run('rm -f {{lock_path}}');
-    }
-});
-
-// Install the bundle assets.
 task('dhil:assets', function() : void {
     $output = run('{{console}} assets:install --symlink');
     writeln($output);
 })->desc('Install any bundle assets.');
 
-// Install the yarn dependencies.
 task('dhil:yarn', function() : void {
     $output = run('cd {{ release_path }} && yarn install --prod --silent');
     writeln($output);
-})->desc('Install bower dependencies.');
+})->desc('Install yarn dependencies.');
 
-// Install the fonts dependencies.
 task('dhil:fonts', function() : void {
     if ( ! file_exists('config/fonts.yaml')) {
         return;
     }
     $output = run('cd {{ release_path }} && ./bin/console nines:fonts:download');
     writeln($output);
-})->desc('Install fonts.');
+})->desc('Install fonts if they are configured in config/fonts.yaml');
 
 /*
  * Run the testsuite on the server.
@@ -100,22 +62,20 @@ task('dhil:phpunit', function() : void {
 
         return;
     }
-    if(file_exists('Makefile')) {
-        $output = run('cd {{ release_path }} && make test.db test', ['timeout' => null ]);
+    if (file_exists('Makefile')) {
+        $output = run('cd {{ release_path }} && make test.db test', ['timeout' => null]);
     } else {
         $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', ['timeout' => null]);
     }
     writeln($output);
-})->desc('Run phpunit.');
+})->desc('Run all unit tests');
 
-// Build the Sphinx documentation.
 task('dhil:sphinx:build', function() : void {
     if (file_exists('docs')) {
         runLocally('sphinx-build docs/source public/docs/sphinx');
     }
 })->desc('Build sphinx docs locally.');
 
-// Upload the complete Sphinx documentation.
 task('dhil:sphinx:upload', function() : void {
     if (file_exists('docs')) {
         $user = get('user');
@@ -128,19 +88,11 @@ task('dhil:sphinx:upload', function() : void {
     }
 })->desc('Upload Sphinx docs to server.');
 
-/*
- * Build and install the Sphinx docs. This is a simple wrapper
- * around dhil:sphinx:build and dhil:sphinx:upload.
- */
 task('dhil:sphinx', [
     'dhil:sphinx:build',
     'dhil:sphinx:upload',
-])->desc('Build sphinx docs locally and upload to server.');
+])->desc('Wrapper around dhil:sphinx:build and dhil:sphinx:upload');
 
-/*
- * Create a backup of the MySQL database. The mysql dump file will be saved as
- * {$app}-{$date}-{$revision}.sql.
- */
 task('dhil:db:backup', function() : void {
     $user = get('user');
     $become = get('become');
@@ -153,17 +105,12 @@ task('dhil:db:backup', function() : void {
     run("sudo mysqldump {$app} -r {$file}");
     run("sudo chown {$become} {$file}");
     set('become', $become);
-})->desc('Backup the mysql database.');
+})->desc('Backup the mysql database');
 
-// Create a MySQL database backup and download it from the server.
 task('dhil:db:schema', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
-    $stage = get('stage');
-
-    $date = date('Y-m-d');
-    $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
     $file = "/home/{$user}/{$app}-schema.sql";
@@ -173,18 +120,13 @@ task('dhil:db:schema', function() : void {
     download($file, basename($file));
     writeln('Downloaded database dump to ' . basename($file));
     set('become', $become);
-})->desc('Make a database backup and download it.');
+})->desc('Make a database schema-only backup and download it.');
 
-// Create a MySQL database backup and download it from the server.
 option('all-tables', null, InputOption::VALUE_NONE, 'Do not ignore any tables when fetching database.');
 task('dhil:db:data', function() : void {
     $user = get('user');
     $become = get('become');
     $app = get('application');
-    $stage = get('stage');
-
-    $date = date('Y-m-d');
-    $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
     $file = "/home/{$user}/{$app}-data.sql";
@@ -200,7 +142,7 @@ task('dhil:db:data', function() : void {
     download($file, basename($file));
     writeln('Downloaded database dump to ' . basename($file));
     set('become', $become);
-})->desc('Make a database backup and download it.');
+})->desc('Make a database data-only backup and download it.');
 
 task('dhil:db:migrate', function() : void {
     $count = (int) runLocally('find migrations -type f -name "*.php" | wc -l');
@@ -221,8 +163,9 @@ task('dhil:db:migrate', function() : void {
             writeln('No migrations found.');
         }
     }
-})->desc('Apply database changes');
+})->desc('Apply database migrations');
 
+// Roll up any outstanding migrations.
 task('dhil:db:rollup', function() : void {
     if ( ! file_exists('migrations')) {
         mkdir('migrations');
@@ -235,14 +178,14 @@ task('dhil:db:rollup', function() : void {
     }
     runLocally('php bin/console doctrine:migrations:dump-schema');
     runLocally('php bin/console doctrine:migrations:rollup');
-});
+})->desc('Roll up any database migrations');
 
 task('dhil:media', function() : void {
     $user = get('user');
     $host = get('hostname');
     $become = get('become');
     runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' {$user}@{$host}:{{release_path}}/data/ data", ['timeout' => null]);
-});
+})->desc('Download any uploaded media, assuming it is in /data');
 
 task('dhil:permissions', function() : void {
     $user = get('user');
@@ -256,7 +199,7 @@ task('dhil:permissions', function() : void {
     }
 
     set('become', $become);
-});
+})->desc('Fix selinux permissions');
 
 // Display a success message.
 task('success', function() : void {
@@ -267,14 +210,15 @@ task('success', function() : void {
 
     writeln("Successfully deployed {$target} release {$release}");
     writeln("Visit http://{$host}{$path} to check.");
-});
+})->desc('Show message on successful deployment');
 
-// Create a MySQL database backup and download it from the server.
+// Create backups of the schema and data and download them.
 task('dhil:db:fetch', [
     'dhil:db:schema',
     'dhil:db:data',
-]);
+])->desc('Wrapper around dhil:db:schema and dhil:db:data');
 
+// Fun a complete deployment
 task('deploy', [
     'dhil:precheck',
     'deploy:info',
