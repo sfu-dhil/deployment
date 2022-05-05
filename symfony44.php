@@ -73,47 +73,6 @@ task('dhil:assets', function() : void {
     writeln($output);
 })->desc('Install any bundle assets.');
 
-/*
- * Run the testsuite on the server.
- *
- * Use the option --skip-tests to skip this step, but do so with caution.
- */
-option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
-task('dhil:phpunit', function() : void {
-    if (input()->getOption('skip-tests')) {
-        writeln('Skipped');
-
-        return;
-    }
-    $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', ['timeout' => null]);
-    writeln($output);
-})->desc('Run phpunit.');
-
-// Empty out the test cache. Do this before and after running the test suite.
-task('dhil:clear:test-cache', function() : void {
-    $output = run('{{console}} cache:clear --env=test');
-    writeln($output);
-});
-
-/*
- * Set up a clean environment on the server and run the test suite. Use with caution, as the
- * shared cache may present issues with the production site. It's very rare but it does happen.
- */
-task('dhil:test', [
-    'deploy:info',
-    'deploy:prepare',
-    'deploy:lock',
-    'deploy:release',
-    'deploy:update_code',
-    'deploy:create_cache_dir',
-    'deploy:shared',
-    'deploy:vendors',
-    'dhil:clear:test-cache',
-    'dhil:phpunit',
-    'dhil:clear:test-cache',
-])->desc('Run test suite on server in a clean environment.');
-after('dhil:test', 'deploy:unlock');
-
 // Install the yarn dependencies.
 task('dhil:yarn', function() : void {
     $output = run('cd {{ release_path }} && yarn install --prod --silent');
@@ -128,6 +87,26 @@ task('dhil:fonts', function() : void {
     $output = run('cd {{ release_path }} && ./bin/console nines:fonts:download');
     writeln($output);
 })->desc('Install fonts.');
+
+/*
+ * Run the testsuite on the server.
+ *
+ * Use the option --skip-tests to skip this step, but do so with caution.
+ */
+option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
+task('dhil:phpunit', function() : void {
+    if (input()->getOption('skip-tests')) {
+        writeln('Skipped');
+
+        return;
+    }
+    if(file_exists('Makefile')) {
+        $output = run('cd {{ release_path }} && make test.db test', ['timeout' => null ]);
+    } else {
+        $output = run('cd {{ release_path }} && ./vendor/bin/phpunit', ['timeout' => null]);
+    }
+    writeln($output);
+})->desc('Run phpunit.');
 
 // Build the Sphinx documentation.
 task('dhil:sphinx:build', function() : void {
@@ -187,7 +166,7 @@ task('dhil:db:schema', function() : void {
     $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
-    $file = "/home/{$user}/{$app}-schema-{$date}-{$stage}-r{$current}.sql";
+    $file = "/home/{$user}/{$app}-schema.sql";
     run("sudo mysqldump {$app} --flush-logs --no-data -r {$file}");
     run("sudo chown {$user} {$file}");
 
@@ -208,7 +187,7 @@ task('dhil:db:data', function() : void {
     $current = get('release_name');
 
     set('become', $user); // prevent sudo -u from failing.
-    $file = "/home/{$user}/{$app}-data-{$date}-{$stage}-r{$current}.sql";
+    $file = "/home/{$user}/{$app}-data.sql";
     $ignore = get('ignore_tables', []);
     if (count($ignore) && ! input()->getOption('all-tables')) {
         $ignoredTables = implode(',', array_map(fn($s) => $app . '.' . $s, $ignore));
@@ -258,6 +237,13 @@ task('dhil:db:rollup', function() : void {
     runLocally('php bin/console doctrine:migrations:rollup');
 });
 
+task('dhil:media', function() : void {
+    $user = get('user');
+    $host = get('hostname');
+    $become = get('become');
+    runLocally("rsync -av --rsync-path='sudo -u {$become} rsync' {$user}@{$host}:{{release_path}}/data/ data", ['timeout' => null]);
+});
+
 task('dhil:permissions', function() : void {
     $user = get('user');
     $become = get('become');
@@ -299,11 +285,9 @@ task('deploy', [
     'deploy:shared',
     'deploy:vendors',
 
-    'dhil:assets',
-    'dhil:clear:test-cache',
-    'dhil:phpunit',
-    'dhil:clear:test-cache',
     'dhil:db:backup',
+    'dhil:assets',
+    'dhil:phpunit',
     'dhil:db:migrate',
     'dhil:sphinx',
     'dhil:yarn',
