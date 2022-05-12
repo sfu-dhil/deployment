@@ -32,6 +32,43 @@ if (file_exists($customFile)) {
 set('console', fn() => parse('{{bin/php}} {{release_path}}/bin/console --no-interaction --quiet'));
 set('lock_path', fn() => parse('{{deploy_path}}/.dep/deploy.lock'));
 
+/*
+ * Check that there are no modified files or commits that haven't been pushed. Ask the
+ * user to confirm.
+ */
+task('dhil:precheck', function() : void {
+    $out = runLocally('git status --porcelain --untracked-files=no');
+    if ('' !== $out) {
+        $modified = count(explode("\n", $out));
+        writeln("<error>Warning:</error> {$modified} modified files have not been committed.");
+        writeln($out);
+        $response = askConfirmation('Continue?');
+        if ( ! $response) {
+            exit;
+        }
+    }
+
+    $out = runLocally('git cherry -v');
+    if ('' !== $out) {
+        $commits = count(explode("\n", $out));
+        writeln("<error>Warning:</error> {$commits} commits not pushed.");
+        $response = askConfirmation('Continue?');
+        if ( ! $response) {
+            exit;
+        }
+    }
+
+    $res = run('[ -f {{lock_path}} ] && echo Locked || echo OK');
+    if ('Locked' === trim($res)) {
+        writeln('<error>Warning:</error> Target is locked. Unlock and continue?');
+        $response = askConfirmation('Continue?');
+        if ( ! $response) {
+            exit;
+        }
+        run('rm -f {{lock_path}}');
+    }
+});
+
 task('dhil:assets', function() : void {
     $output = run('{{console}} assets:install --symlink');
     writeln($output);
