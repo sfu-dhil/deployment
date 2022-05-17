@@ -202,21 +202,6 @@ task('dhil:db:migrate', function() : void {
     }
 })->desc('Apply database migrations');
 
-// Roll up any outstanding migrations.
-task('dhil:db:rollup', function() : void {
-    if ( ! file_exists('migrations')) {
-        mkdir('migrations');
-    }
-    $count = (int) runLocally('find migrations -type f -name "*.php" | wc -l');
-    if (0 !== $count) {
-        writeln("There are {$count} migrations which must be removed before rolling up.");
-
-        exit;
-    }
-    runLocally('php bin/console doctrine:migrations:dump-schema');
-    runLocally('php bin/console doctrine:migrations:rollup');
-})->desc('Roll up any database migrations');
-
 task('dhil:media', function() : void {
     $user = get('user');
     $host = get('hostname');
