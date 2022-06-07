@@ -89,10 +89,7 @@ task('dhil:fonts', function() : void {
 
 /*
  * Run the testsuite on the server.
- *
- * Use the option --skip-tests to skip this step, but do so with caution.
  */
-option('skip-tests', null, InputOption::VALUE_NONE, 'Skip testing. Probably a bad idea.');
 task('dhil:phpunit', function() : void {
     if (input()->getOption('skip-tests')) {
         writeln('Skipped');
