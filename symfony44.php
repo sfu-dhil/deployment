@@ -91,11 +91,6 @@ task('dhil:fonts', function() : void {
  * Run the testsuite on the server.
  */
 task('dhil:phpunit', function() : void {
-    if (input()->getOption('skip-tests')) {
-        writeln('Skipped');
-
-        return;
-    }
     if (file_exists('Makefile')) {
         $output = run('cd {{ release_path }} && make test.db test', ['timeout' => null]);
     } else {
